@@ -1,0 +1,19 @@
+# Create a .gitignore file and append the necessary exclusion rules
+cat << 'EOF' > .gitignore
+# Node.js
+node_modules/
+dist/
+.next/
+
+# Python & ML
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Docker & Local Data Volumes (Crucial for your MLOps setup)
+minio_data/
+postgres_data/
+mlruns/
+k3s_data/
+k3s_output/

@@ -1,0 +1,108 @@
+version: "3.9"
+services:
+
+  postgres:
+    image: "postgres:16"
+    container_name: "postgres"
+    working_dir: "/var/lib/postgresql/data"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - "./postgres_data:/var/lib/postgresql/data"
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+  minio:
+    image: "minio/minio:latest"
+    container_name: "minio"
+    working_dir: "/data"
+    command: >
+      server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+    volumes:
+      - "./minio_data:/data"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  mlflow:
+      build:
+        context: ./mlflow
+        dockerfile: Dockerfile
+      container_name: mlflow
+      working_dir: /mlflow_code
+      # Add the explicit command to start the MLflow tracking server
+      command: >
+        mlflow server
+        --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+        --default-artifact-root s3://mlflow/
+        --host 0.0.0.0 --port 5000
+      environment:
+        MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+        AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
+        AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
+        MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_ARTIFACT_ROOT}"
+        MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      depends_on:
+        - postgres
+        - minio
+      volumes:
+        - "./mlflow:/mlflow_code"
+      ports:
+        - "${MLFLOW_PORT}:5000"
+      restart: always
+
+  trainer:
+    build:
+      context: "./train_service"
+      dockerfile: "Dockerfile"
+    container_name: "trainer"
+    working_dir: "/app"
+    command: > 
+      bash -c "cd /app && tail -f /dev/null"
+    environment:
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+    volumes:
+      - "./train_service:/app"
+    depends_on:
+      - "mlflow"
+      - "minio"
+      - "postgres"
+
+  inference:
+    build:
+      context: "./inference_service"
+      dockerfile: "Dockerfile"
+    container_name: "inference"
+    working_dir: "/app"
+    command: >
+      bash -c "cd /app && uvicorn app:app --reload --host 0.0.0.0 --port 8000"
+    environment:
+      MODEL_STORE: "/app/models"
+    volumes:
+      - "./inference_service:/app"
+    depends_on:
+      - "mlflow"
+      - "minio"
+    ports:
+      - "${INFER_PORT}:8000"
+
+  ui:
+    image: "node:18"
+    container_name: "ui"
+    working_dir: "/app"
+    command: >
+      bash -c "cd /app && npm install && npm run dev"
+    environment:
+      NODE_ENV: "development"
+    volumes:
+      - "./ui:/app"
+    ports:
+      - "${UI_PORT}:3000"

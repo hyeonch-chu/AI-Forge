@@ -1,0 +1,15 @@
+{
+  "name": "ai-forge-ui",
+  "version": "1.0.0",
+  "description": "VLM MLOps Frontend",
+  "scripts": {
+    "dev": "echo 'UI is waiting to be built...' && tail -f /dev/null",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "next": "^13.4.0"
+  }
+}
