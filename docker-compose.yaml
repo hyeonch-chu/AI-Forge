@@ -13,6 +13,12 @@ services:
       - "./postgres_data:/var/lib/postgresql/data"
     ports:
       - "${POSTGRES_PORT}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: "minio/minio:latest"
@@ -28,33 +34,46 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mlflow:
-      build:
-        context: ./mlflow
-        dockerfile: Dockerfile
-      container_name: mlflow
-      working_dir: /mlflow_code
-      # Add the explicit command to start the MLflow tracking server
-      command: >
-        mlflow server
-        --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-        --default-artifact-root s3://mlflow/
-        --host 0.0.0.0 --port 5000
-      environment:
-        MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
-        AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
-        AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
-        MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_ARTIFACT_ROOT}"
-        MLFLOW_TRACKING_URI: "http://mlflow:5000"
-      depends_on:
-        - postgres
-        - minio
-      volumes:
-        - "./mlflow:/mlflow_code"
-      ports:
-        - "${MLFLOW_PORT}:5000"
-      restart: always
+    build:
+      context: ./mlflow
+      dockerfile: Dockerfile
+    container_name: mlflow
+    working_dir: /mlflow_code
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0 --port 5000
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_ARTIFACT_ROOT}"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - "./mlflow:/mlflow_code"
+    ports:
+      - "${MLFLOW_PORT}:5000"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   trainer:
     build:
@@ -62,7 +81,7 @@ services:
       dockerfile: "Dockerfile"
     container_name: "trainer"
     working_dir: "/app"
-    command: > 
+    command: >
       bash -c "cd /app && tail -f /dev/null"
     environment:
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
@@ -72,9 +91,12 @@ services:
     volumes:
       - "./train_service:/app"
     depends_on:
-      - "mlflow"
-      - "minio"
-      - "postgres"
+      mlflow:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   inference:
     build:
@@ -86,13 +108,28 @@ services:
       bash -c "cd /app && uvicorn app:app --reload --host 0.0.0.0 --port 8000"
     environment:
       MODEL_STORE: "/app/models"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      MLFLOW_MODEL_NAME: "${MLFLOW_MODEL_NAME:-yolo_detector}"
+      MLFLOW_MODEL_STAGE: "${MLFLOW_MODEL_STAGE:-Production}"
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
     volumes:
       - "./inference_service:/app"
     depends_on:
-      - "mlflow"
-      - "minio"
+      mlflow:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - "${INFER_PORT}:8000"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   ui:
     image: "node:18"

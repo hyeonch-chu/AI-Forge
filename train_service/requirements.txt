@@ -1,3 +1,7 @@
 mlflow
 torch
 torchvision
+ultralytics
+Pillow
+numpy
+boto3

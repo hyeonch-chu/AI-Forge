@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge log --oneline -10)",
+      "Bash(git -C /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge status)",
+      "Bash(git -C /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge ls-files:*)",
+      "Bash(docker exec:*)",
+      "Bash(chmod:*)",
+      "Bash(bash -n:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}
