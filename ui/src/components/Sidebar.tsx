@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 /** Internal navigation links (Next.js client-side routing). */
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: '▦' },
+  { label: 'Training', href: '/training', icon: '▶' },
   { label: 'Experiments', href: '/experiments', icon: '⚗' },
   { label: 'Models', href: '/models', icon: '⬡' },
   { label: 'Inference', href: '/inference', icon: '◎' },

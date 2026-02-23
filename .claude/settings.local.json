@@ -11,7 +11,32 @@
       "Bash(curl:*)",
       "Bash(tmux list-sessions:*)",
       "Bash(tmux list-windows:*)",
-      "Bash(find /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/src -type f | sort && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/*.{json,js,ts} 2>/dev/null || true && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/{pyproject.toml,.flake8} 2>/dev/null)"
+      "Bash(find /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/src -type f | sort && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/*.{json,js,ts} 2>/dev/null || true && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/{pyproject.toml,.flake8} 2>/dev/null)",
+      "Bash(docker ps -a --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\" 2>&1)",
+      "Bash(for port in 5432 9000 9001 5000 8000 3000 3001 3100; do\n  echo -n \"Port $port: \"\n  ss -tlnp 2>/dev/null | grep \":$port \" || echo \"free\"\ndone)",
+      "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\" 2>&1)",
+      "Bash(ps -p 1890983 -o pid,ppid,cmd 2>&1\ndocker ps -a --filter \"name=postgres\" --filter \"name=mlflow\" --filter \"name=trainer\" --filter \"name=inference\" 2>&1)",
+      "Bash(docker exec ui bash -c \"cd /app && node -e \\\\\"const jest=require\\('jest'\\); console.log\\(jest.getVersion\\(\\)\\)\\\\\"\" 2>&1\ndocker exec ui bash -c \"cd /app && npx jest --showConfig 2>&1 | grep -i 'setup'\" 2>&1 | head -20)",
+      "Bash(curl -s http://localhost:3100/loki/api/v1/status/buildinfo 2>&1 | head -3\ndocker exec loki wget -qO- http://localhost:3100/ready 2>&1\ndocker logs loki --tail=5 2>&1)",
+      "Bash(docker exec inference pip --version 2>&1\ndocker exec inference cat /etc/debian_version 2>&1\ndocker exec inference cat /proc/version 2>&1 | cut -c1-80)",
+      "Bash(docker exec inference cat /etc/os-release 2>&1\ndocker exec mlflow pip --version 2>&1\ndocker exec mlflow cat /etc/os-release 2>&1 | grep -E \"^\\(NAME|VERSION_ID\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.ultralytics.com)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\" 2>/dev/null || echo \"Docker not accessible\")",
+      "Bash(docker ps --filter name=trainer --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\")",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/a5f3f84a | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(l\\) for l in d['log_tail']]\")",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/775270a3 | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(l\\) for l in d['log_tail']]\")",
+      "Bash(nvidia-smi 2>/dev/null | head -20 || echo \"nvidia-smi not found\")",
+      "Bash(docker info 2>/dev/null | grep -i runtime)",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/5f1b16fd | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(l\\) for l in d['log_tail']]\")",
+      "Bash(pip index versions tqdm 2>/dev/null | head -3 || pip install tqdm --dry-run 2>&1 | grep \"Would install\")",
+      "Bash(pip show tqdm 2>/dev/null | grep Version || python3 -c \"import tqdm; print\\(tqdm.__version__\\)\" 2>/dev/null || curl -s https://pypi.org/pypi/tqdm/json | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['info']['version']\\)\")",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/6ddd7161 | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d['status']\\); print\\('lines:', len\\(d['log_tail']\\)\\); [print\\(repr\\(l\\)\\) for l in d['log_tail']]\")",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/6ddd7161 | python3 -c \"\nimport sys, json\nd = json.load\\(sys.stdin\\)\nprint\\('status:', d['status'], '| lines:', len\\(d['log_tail']\\)\\)\nprint\\('---'\\)\nfor l in d['log_tail']:\n    print\\(l\\)\n\")",
+      "Bash(curl -s http://localhost:6006/api/v1/train/jobs && echo && curl -s http://localhost:6006/api/v1/train/status/6ddd7161 | python3 -m json.tool 2>/dev/null | head -5)",
+      "Bash(curl -s http://localhost:6006/api/v1/train/status/ffcab142 | python3 -c \"\nimport sys, json\nd = json.load\\(sys.stdin\\)\nprint\\('status:', d['status'], '| total lines:', len\\(d['log_tail']\\)\\)\nprint\\('=== last 30 lines ==='\\)\nfor l in d['log_tail'][-30:]:\n    print\\(repr\\(l\\)\\)\n\")"
     ]
   }
 }

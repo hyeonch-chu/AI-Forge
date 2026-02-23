@@ -2,6 +2,13 @@ import Link from 'next/link';
 
 const FEATURE_CARDS = [
   {
+    title: 'Training',
+    description:
+      'Submit a YOLO training job, configure hyperparameters, and watch live log output as it runs.',
+    href: '/training',
+    icon: '▶',
+  },
+  {
     title: 'Experiments',
     description:
       'Track YOLO training runs, compare metrics across runs, and view full experiment history.',
@@ -41,7 +48,7 @@ export default function HomePage() {
       </div>
 
       {/* Navigation cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         {FEATURE_CARDS.map((card) => (
           <Link
             key={card.href}

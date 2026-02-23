@@ -148,7 +148,7 @@ def train(
             imgsz=imgsz,
             batch=batch,
             device=device,
-            project="runs/train",
+            project="/app/runs/train",
             name=run_name or "exp",
             exist_ok=True,
         )

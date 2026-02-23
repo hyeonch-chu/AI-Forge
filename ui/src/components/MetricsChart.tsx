@@ -45,7 +45,7 @@ export default function MetricsChart({ runs }: MetricsChartProps) {
   return (
     <div className="mt-4 rounded-lg bg-gray-950 border border-gray-800 p-3">
       <p className="text-xs text-gray-500 mb-2">Detection metrics across runs</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" aria-label="Metrics bar chart">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Metrics bar chart">
         {/* ── Y-axis grid lines and labels ── */}
         {Y_TICKS.map((v) => (
           <g key={v}>

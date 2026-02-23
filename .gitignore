@@ -5,6 +5,11 @@ node_modules/
 dist/
 .next/
 
+# Data and Artifacts
+data/*
+train_service/runs/*
+train_service/yolo*.pt
+
 # Python & ML
 __pycache__/
 *.pyc

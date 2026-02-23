@@ -79,6 +79,7 @@ services:
       --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       --default-artifact-root s3://mlflow/
       --host 0.0.0.0 --port 5000
+      --allowed-hosts "mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000"
     environment:
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
       AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
@@ -112,14 +113,19 @@ services:
     container_name: "trainer"
     working_dir: "/app"
     command: >
-      bash -c "cd /app && tail -f /dev/null"
+      bash -c "cd /app && uvicorn app:app --reload --host 0.0.0.0 --port 6006"
     environment:
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
       AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      GIT_PYTHON_REFRESH: "quiet"  # silence MLflow's git-not-found warning
+      PYTHONUNBUFFERED: "1"          # force unbuffered stdout so logs stream immediately
+      NVIDIA_VISIBLE_DEVICES: "all"  # expose all host GPUs to the container
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
     volumes:
       - "./train_service:/app"
+      - "./data:/data"  # dataset YAML files and downloaded datasets (e.g. data/VOC.yaml)
     depends_on:
       mlflow:
         condition: service_healthy
@@ -127,8 +133,18 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    ports:
+      - "${TRAIN_PORT:-6006}:6006"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
-      - backend
+      - backend  # reaches mlflow and minio
+      - api      # reachable by ui for job submission
 
   inference:
     build:
@@ -186,6 +202,7 @@ services:
       # Next.js API routes use these to reach backend services on the Docker network
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       INFERENCE_URL: "http://inference:8000"
+      TRAIN_URL: "http://trainer:6006"
     volumes:
       - "./ui:/app"
     ports:

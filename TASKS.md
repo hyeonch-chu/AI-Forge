@@ -1,7 +1,7 @@
 # TASKS.md — AI-Forge Project Task Registry
 
 > Reference: [CLAUDE.md](CLAUDE.md) for conventions, API specs, and architecture.
-> Last updated: 2026-02-23 12:17 (session 5)
+> Last updated: 2026-02-23 (session 6)
 
 ---
 
@@ -56,6 +56,18 @@
 | [L7] | Add MinIO bucket lifecycle policies for artifact retention                  | ✅ Done     | 2026-02-23 12:16 |
 | [L8] | Restrict internal service networking (Postgres, MinIO not publicly exposed) | ✅ Done     | 2026-02-23 10:15 |
 | [L9] | Add `teardown.sh` script for clean stack removal                            | ✅ Done     | 2026-02-23 10:15 |
+
+---
+
+## Session 6 — Training UI
+
+| ID   | Task                                                                               | Status      | Completed At |
+|------|------------------------------------------------------------------------------------|-------------|--------------|
+| [T1] | Add `train_service/app.py` FastAPI server (POST /train, GET /train/status, /jobs) | ✅ Done     | 2026-02-23   |
+| [T2] | Add Next.js API proxy routes (`/api/train`, `/api/train/status/[jobId]`)           | ✅ Done     | 2026-02-23   |
+| [T3] | Build `/training` page — form, live log viewer, 2 s polling, status badges        | ✅ Done     | 2026-02-23   |
+| [T4] | Update `docker-compose.yaml` — trainer runs uvicorn, TRAIN_PORT, healthcheck      | ✅ Done     | 2026-02-23   |
+| [T5] | Add Training link to `Sidebar.tsx` and Training card to `page.tsx` dashboard      | ✅ Done     | 2026-02-23   |
 
 ---
 

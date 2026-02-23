@@ -12,8 +12,8 @@ const customConfig = {
   // Use jsdom to simulate a browser environment for React component tests
   testEnvironment: 'jest-environment-jsdom',
 
-  // Run @testing-library/jest-dom matchers setup after the framework loads
-  setupFilesAfterFramework: ['<rootDir>/jest.setup.ts'],
+  // Run @testing-library/jest-dom matchers setup after the test environment loads
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 
   // Resolve @/* imports to src/*
   moduleNameMapper: {
