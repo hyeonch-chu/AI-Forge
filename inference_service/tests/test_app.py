@@ -11,6 +11,8 @@ import io
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import app as app_module  # used to patch auth key constants
+
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -163,3 +165,96 @@ class TestDetectInferenceError:
             resp = client.post("/api/v1/detect", json=payload)
         assert resp.status_code == 500
         assert resp.json()["detail"] == "Inference failed: GPU OOM"
+
+
+# ---------------------------------------------------------------------------
+# L1/L2 — API key authentication tests
+# ---------------------------------------------------------------------------
+_VALID_ADMIN_KEY = "test-admin-key-abc123"
+_VALID_VIEWER_KEY = "test-viewer-key-xyz789"
+_WRONG_KEY = "completely-wrong-key"
+
+
+class TestAuthDisabled:
+    """When no keys are configured, all endpoints are open."""
+
+    def test_health_accessible_without_key(self, client: TestClient) -> None:
+        resp = client.get("/health")
+        assert resp.status_code == 200
+
+    def test_detect_accessible_without_key_when_auth_disabled(
+        self, client: TestClient
+    ) -> None:
+        # Default fixture has INFERENCE_ADMIN_KEY="" → auth disabled
+        payload = {"image_base64": _make_b64_image()}
+        resp = client.post("/api/v1/detect", json=payload)
+        assert resp.status_code == 200
+
+
+class TestAdminKeyAuth:
+    """When INFERENCE_ADMIN_KEY is set, /detect requires the correct key."""
+
+    def test_detect_returns_401_without_key(self, client: TestClient) -> None:
+        with patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY):
+            payload = {"image_base64": _make_b64_image()}
+            resp = client.post("/api/v1/detect", json=payload)
+        assert resp.status_code == 401
+
+    def test_detect_returns_401_with_wrong_key(self, client: TestClient) -> None:
+        with patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY):
+            payload = {"image_base64": _make_b64_image()}
+            resp = client.post(
+                "/api/v1/detect", json=payload, headers={"X-API-Key": _WRONG_KEY}
+            )
+        assert resp.status_code == 401
+
+    def test_detect_returns_200_with_correct_admin_key(self, client: TestClient) -> None:
+        with patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY):
+            payload = {"image_base64": _make_b64_image()}
+            resp = client.post(
+                "/api/v1/detect", json=payload, headers={"X-API-Key": _VALID_ADMIN_KEY}
+            )
+        assert resp.status_code == 200
+
+    def test_health_always_accessible_regardless_of_key(self, client: TestClient) -> None:
+        """GET /health must always be reachable — it is used by Docker healthchecks."""
+        with patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY):
+            resp = client.get("/health")
+        assert resp.status_code == 200
+
+    def test_error_response_body_mentions_header(self, client: TestClient) -> None:
+        with patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY):
+            payload = {"image_base64": _make_b64_image()}
+            body = client.post("/api/v1/detect", json=payload).json()
+        assert "X-API-Key" in body["detail"]
+
+
+class TestViewerKeyRBAC:
+    """Viewer key cannot call admin-only endpoints."""
+
+    def test_detect_returns_401_with_viewer_key_when_admin_key_set(
+        self, client: TestClient
+    ) -> None:
+        """A viewer-level key must not be accepted on the admin-only detect endpoint."""
+        with (
+            patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY),
+            patch.object(app_module, "INFERENCE_VIEWER_KEY", _VALID_VIEWER_KEY),
+        ):
+            payload = {"image_base64": _make_b64_image()}
+            resp = client.post(
+                "/api/v1/detect", json=payload, headers={"X-API-Key": _VALID_VIEWER_KEY}
+            )
+        assert resp.status_code == 401
+
+    def test_detect_accessible_with_admin_key_when_viewer_also_set(
+        self, client: TestClient
+    ) -> None:
+        with (
+            patch.object(app_module, "INFERENCE_ADMIN_KEY", _VALID_ADMIN_KEY),
+            patch.object(app_module, "INFERENCE_VIEWER_KEY", _VALID_VIEWER_KEY),
+        ):
+            payload = {"image_base64": _make_b64_image()}
+            resp = client.post(
+                "/api/v1/detect", json=payload, headers={"X-API-Key": _VALID_ADMIN_KEY}
+            )
+        assert resp.status_code == 200

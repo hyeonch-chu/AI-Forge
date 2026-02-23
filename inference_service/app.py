@@ -13,8 +13,9 @@ from typing import Any
 import mlflow
 import mlflow.pyfunc
 import numpy as np
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -34,7 +35,74 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 MODEL_NAME = os.getenv("MLFLOW_MODEL_NAME", "yolo_detector")
 MODEL_STAGE = os.getenv("MLFLOW_MODEL_STAGE", "Production")
 
+# Backend selector: "mlflow" (default) uses the MLflow-registered YOLO model;
+# "claude" uses the Anthropic VLM API via backends/claude_backend.py.
+BACKEND = os.getenv("BACKEND", "mlflow")
+
+# ---------------------------------------------------------------------------
+# L1/L2 — API key authentication and role-based access control
+# ---------------------------------------------------------------------------
+# Two optional role tiers controlled by environment variables:
+#   INFERENCE_ADMIN_KEY   — full access; required for POST /api/v1/detect
+#   INFERENCE_VIEWER_KEY  — read-only access; guards future GET-only endpoints
+#
+# If a key env var is empty string (the default), that role is disabled and
+# auth is skipped — convenient for local development without credentials.
+INFERENCE_ADMIN_KEY: str = os.getenv("INFERENCE_ADMIN_KEY", "")
+INFERENCE_VIEWER_KEY: str = os.getenv("INFERENCE_VIEWER_KEY", "")
+
+# FastAPI security scheme — clients pass the key in an "X-API-Key" header
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def require_admin_key(api_key: str | None = Security(_api_key_header)) -> None:
+    """Enforce admin-level API key authentication.
+
+    Grants access only when the ``X-API-Key`` header matches ``INFERENCE_ADMIN_KEY``.
+    Authentication is bypassed when ``INFERENCE_ADMIN_KEY`` is not configured,
+    allowing password-free local development.
+
+    Raises:
+        HTTPException: 401 if the key is configured but missing or incorrect.
+    """
+    if not INFERENCE_ADMIN_KEY:
+        return  # auth disabled — no admin key configured
+    if api_key != INFERENCE_ADMIN_KEY:
+        logger.warning("Rejected request: invalid or missing admin API key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin API key required. Supply it in the X-API-Key header.",
+            headers={"WWW-Authenticate": 'ApiKey realm="AI-Forge"'},
+        )
+
+
+def require_viewer_key(api_key: str | None = Security(_api_key_header)) -> None:
+    """Enforce at least viewer-level API key authentication.
+
+    Accepts both admin and viewer keys. Auth is bypassed when neither key is
+    configured, allowing password-free local development.
+
+    Raises:
+        HTTPException: 401 if any keys are configured but the supplied key is invalid.
+    """
+    valid_keys = {k for k in (INFERENCE_ADMIN_KEY, INFERENCE_VIEWER_KEY) if k}
+    if not valid_keys:
+        return  # auth disabled — no keys configured
+    if api_key not in valid_keys:
+        logger.warning("Rejected request: invalid or missing API key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid API key required. Supply it in the X-API-Key header.",
+            headers={"WWW-Authenticate": 'ApiKey realm="AI-Forge"'},
+        )
+
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+# Import the Claude backend module only when it is the selected backend.
+# This avoids mandatory anthropic package errors for users who never use Claude.
+_claude_backend = None
+if BACKEND == "claude":
+    from backends import claude_backend as _claude_backend  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # App
@@ -42,6 +110,16 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 app = FastAPI(
     title="AI-Forge Inference Service",
     version="1.0.0",
+    description=(
+        "YOLO object detection API backed by models loaded from the MLflow registry.\n\n"
+        "Submit a base64-encoded image to `POST /api/v1/detect` and receive structured "
+        "predictions with bounding boxes, confidence scores, and latency metrics.\n\n"
+        "**Interactive docs:** `/docs` (Swagger UI) · `/redoc` (ReDoc)"
+    ),
+    docs_url="/docs",
+    redoc_url="/redoc",
+    contact={"name": "AI-Forge", "url": "https://github.com/your-org/ai-forge"},
+    license_info={"name": "MIT"},
 )
 
 _model: Any = None
@@ -176,16 +254,48 @@ def health() -> dict:
     response_model=DetectResponse,
     status_code=status.HTTP_200_OK,
     summary="Run object detection on a base64-encoded image",
+    # Admin key required (no-op when INFERENCE_ADMIN_KEY is not configured)
+    dependencies=[Depends(require_admin_key)],
 )
 def detect(request: DetectRequest) -> DetectResponse:
-    """Decode the image, run MLflow model inference, return structured results."""
-    logger.info("POST /api/v1/detect options=%s", request.options)
+    """Decode the image, run inference via the selected backend, return structured results.
+
+    Backend is controlled by the ``BACKEND`` environment variable:
+      - ``"mlflow"`` (default): loads the registered YOLO model from MLflow.
+      - ``"claude"``: forwards the image to the Anthropic VLM API.
+    """
+    logger.info("POST /api/v1/detect backend=%s options=%s", BACKEND, request.options)
     image = decode_image(request.image_base64)
-    model = get_model()
-    raw_preds, metrics = run_inference(model, image, request.options)
+
+    if BACKEND == "claude" and _claude_backend is not None:
+        # Claude VLM path — times the full API round-trip
+        t_start = time.perf_counter()
+        try:
+            raw_preds = _claude_backend.run_claude_inference(image, request.options)
+        except RuntimeError as exc:
+            logger.error("Claude inference failed: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
+        latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
+        metrics: dict[str, Any] = {
+            "latency_ms": latency_ms,
+            "image_width": image.width,
+            "image_height": image.height,
+            "num_predictions": len(raw_preds),
+            "backend": "claude",
+        }
+    else:
+        # MLflow / YOLO path (default)
+        model = get_model()
+        raw_preds, metrics = run_inference(model, image, request.options)
+        metrics["backend"] = "mlflow"
+
     predictions = [Prediction(**p) for p in raw_preds]
     logger.info(
-        "Detection complete: num_predictions=%d latency_ms=%s",
+        "Detection complete: backend=%s num_predictions=%d latency_ms=%s",
+        BACKEND,
         len(predictions),
         metrics.get("latency_ms"),
     )

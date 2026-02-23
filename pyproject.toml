@@ -1,0 +1,32 @@
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  | \.git
+  | \.venv
+  | node_modules
+  | postgres_data
+  | minio_data
+)/
+'''
+
+[tool.pylint.main]
+# Only analyse the two Python service directories
+ignore-patterns = ["test_.*\\.py", "conftest\\.py"]
+
+[tool.pylint.messages_control]
+# Disable import errors so pylint runs without installing all deps in CI
+disable = [
+  "C0114",  # missing-module-docstring (covered by flake8)
+  "C0115",  # missing-class-docstring
+  "C0116",  # missing-function-docstring
+  "E0401",  # import-error (deps not installed in lint env)
+  "E0611",  # no-name-in-module
+  "R0903",  # too-few-public-methods
+  "W0611",  # unused-import (black/flake8 handle this)
+]
+
+[tool.pylint.format]
+max-line-length = 100

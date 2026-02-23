@@ -8,7 +8,10 @@
       "Bash(chmod:*)",
       "Bash(bash -n:*)",
       "Bash(docker compose:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(tmux list-sessions:*)",
+      "Bash(tmux list-windows:*)",
+      "Bash(find /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/src -type f | sort && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/ui/*.{json,js,ts} 2>/dev/null || true && echo \"---\" && ls /mnt/sdab1/userHome/hcchu/PERSONAL_PROJECT/AI-Forge/{pyproject.toml,.flake8} 2>/dev/null)"
     ]
   }
 }

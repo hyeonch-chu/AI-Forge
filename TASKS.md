@@ -1,7 +1,7 @@
 # TASKS.md — AI-Forge Project Task Registry
 
 > Reference: [CLAUDE.md](CLAUDE.md) for conventions, API specs, and architecture.
-> Last updated: 2026-02-21 20:41
+> Last updated: 2026-02-23 12:17 (session 5)
 
 ---
 
@@ -27,19 +27,19 @@
 
 | ID    | Task                                                                      | Status      | Completed At |
 |-------|---------------------------------------------------------------------------|-------------|--------------|
-| [M1]  | Scaffold Next.js `src/` directory with pages and component structure      | Not Started | —            |
-| [M2]  | Build experiment tracking dashboard UI (list/filter MLflow experiments)   | Not Started | —            |
-| [M3]  | Build model management UI (view, register, compare models from registry)  | Not Started | —            |
-| [M4]  | Build inference UI (upload image, call `/api/v1/detect`, render results)  | Not Started | —            |
-| [M5]  | Add MLflow metrics visualization charts to UI dashboard                   | Not Started | —            |
-| [M6]  | Support YOLO model variants (YOLOv8, YOLOv10, YOLOv11) in training       | Not Started | —            |
-| [M7]  | Add ONNX/TensorRT export step after training                              | Not Started | —            |
-| [M8]  | Integrate Claude VLM as an optional inference backend                     | Not Started | —            |
-| [M9]  | Add Grafana + Loki logging aggregation service to Docker Compose          | Not Started | —            |
-| [M10] | Add structured JSON logging across inference and train services           | Not Started | —            |
-| [M11] | Add Jest test suite for UI components                                     | Not Started | —            |
-| [M12] | Add ESLint and Prettier config and enforce in CI                          | Not Started | —            |
-| [M13] | Add pylint/black linting to Python services and enforce in CI             | Not Started | —            |
+| [M1]  | Scaffold Next.js `src/` directory with pages and component structure      | ✅ Done     | 2026-02-23 09:30 |
+| [M2]  | Build experiment tracking dashboard UI (list/filter MLflow experiments)   | ✅ Done     | 2026-02-23 09:30 |
+| [M3]  | Build model management UI (view, register, compare models from registry)  | ✅ Done     | 2026-02-23 09:30 |
+| [M4]  | Build inference UI (upload image, call `/api/v1/detect`, render results)  | ✅ Done     | 2026-02-23 09:30 |
+| [M5]  | Add MLflow metrics visualization charts to UI dashboard                   | ✅ Done     | 2026-02-23 10:15 |
+| [M6]  | Support YOLO model variants (YOLOv8, YOLOv10, YOLOv11) in training       | ✅ Done     | 2026-02-23 10:15 |
+| [M7]  | Add ONNX/TensorRT export step after training                              | ✅ Done     | 2026-02-23 10:15 |
+| [M8]  | Integrate Claude VLM as an optional inference backend                     | ✅ Done     | 2026-02-23 11:30 |
+| [M9]  | Add Grafana + Loki logging aggregation service to Docker Compose          | ✅ Done     | 2026-02-23 10:15 |
+| [M10] | Add structured JSON logging across inference and train services           | ✅ Done     | 2026-02-21 20:41 |
+| [M11] | Add Jest test suite for UI components                                     | ✅ Done     | 2026-02-23 11:30 |
+| [M12] | Add ESLint and Prettier config and enforce in CI                          | ✅ Done     | 2026-02-23 09:30 |
+| [M13] | Add pylint/black linting to Python services and enforce in CI             | ✅ Done     | 2026-02-23 09:30 |
 
 ---
 
@@ -47,15 +47,15 @@
 
 | ID   | Task                                                                        | Status      | Completed At |
 |------|-----------------------------------------------------------------------------|-------------|--------------|
-| [L1] | Implement API authentication (JWT or API key middleware)                    | Not Started | —            |
-| [L2] | Implement role-based access control (RBAC) for UI and API                  | Not Started | —            |
+| [L1] | Implement API authentication (JWT or API key middleware)                    | ✅ Done     | 2026-02-23 12:15 |
+| [L2] | Implement role-based access control (RBAC) for UI and API                  | ✅ Done     | 2026-02-23 12:15 |
 | [L3] | Create `.env.example` template for onboarding                               | ✅ Done     | 2026-02-21 20:41 |
-| [L4] | Expand `README.md` with setup, usage, and architecture overview             | Not Started | —            |
-| [L5] | Add OpenAPI/Swagger auto-docs for inference service (`/docs`)               | Not Started | —            |
-| [L6] | Write deployment guide for on-premise production setup                      | Not Started | —            |
-| [L7] | Add MinIO bucket lifecycle policies for artifact retention                  | Not Started | —            |
-| [L8] | Restrict internal service networking (Postgres, MinIO not publicly exposed) | Not Started | —            |
-| [L9] | Add `teardown.sh` script for clean stack removal                            | Not Started | —            |
+| [L4] | Expand `README.md` with setup, usage, and architecture overview             | ✅ Done     | 2026-02-23 12:17 |
+| [L5] | Add OpenAPI/Swagger auto-docs for inference service (`/docs`)               | ✅ Done     | 2026-02-23 10:15 |
+| [L6] | Write deployment guide for on-premise production setup                      | ✅ Done     | 2026-02-23 12:16 |
+| [L7] | Add MinIO bucket lifecycle policies for artifact retention                  | ✅ Done     | 2026-02-23 12:16 |
+| [L8] | Restrict internal service networking (Postgres, MinIO not publicly exposed) | ✅ Done     | 2026-02-23 10:15 |
+| [L9] | Add `teardown.sh` script for clean stack removal                            | ✅ Done     | 2026-02-23 10:15 |
 
 ---
 

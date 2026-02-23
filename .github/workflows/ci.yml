@@ -11,7 +11,7 @@ jobs:
   # Python linting — inference_service & train_service
   # ---------------------------------------------------------------------------
   lint-python:
-    name: Lint Python (flake8 + black)
+    name: Lint Python (black + flake8 + pylint)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,13 +25,47 @@ jobs:
           python-version: "3.10"
 
       - name: Install linting tools
-        run: pip install flake8 black
+        run: pip install flake8 black pylint
 
       - name: black (format check)
         run: black --check ${{ matrix.service }}/
 
       - name: flake8
-        run: flake8 ${{ matrix.service }}/ --max-line-length=100 --extend-ignore=E203,W503
+        # Config is read from .flake8 at the repo root
+        run: flake8 ${{ matrix.service }}/
+
+      - name: pylint
+        # E0401/E0611 disabled — dependencies are not installed in the lint env
+        run: |
+          pylint ${{ matrix.service }}/*.py \
+            --disable=E0401,E0611,C0114,C0115,C0116,R0903 \
+            --max-line-length=100 \
+            --fail-under=7.0
+
+  # ---------------------------------------------------------------------------
+  # UI tests — Jest + @testing-library/react (M11)
+  # ---------------------------------------------------------------------------
+  test-ui:
+    name: Test UI (Jest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: npm run test:ci
 
   # ---------------------------------------------------------------------------
   # Build Docker images
@@ -39,7 +73,7 @@ jobs:
   build:
     name: Build Docker images
     runs-on: ubuntu-latest
-    needs: lint-python
+    needs: [lint-python, test-ui]
     steps:
       - uses: actions/checkout@v4
 

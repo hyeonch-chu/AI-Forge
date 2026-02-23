@@ -1,0 +1,15 @@
+[flake8]
+max-line-length = 100
+extend-ignore =
+    # Whitespace before ':' — conflicts with black formatting
+    E203,
+    # Line break before binary operator — conflicts with black
+    W503
+exclude =
+    .git,
+    __pycache__,
+    node_modules,
+    postgres_data,
+    minio_data,
+    .venv,
+    */migrations/*

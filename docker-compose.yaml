@@ -1,5 +1,24 @@
 version: "3.9"
+
+# ── Custom networks (L8 — network isolation) ──────────────────────────────────
+# backend : data-layer and internal services (postgres, minio, mlflow, trainer)
+# api     : web-facing services that the UI calls (mlflow, inference, ui)
+# Postgres and MinIO are on the 'backend' network only — they are not
+# reachable from the 'api' network, reducing their attack surface.
+networks:
+  backend:
+    driver: bridge
+  api:
+    driver: bridge
+
+# ── Named volumes for stateful monitoring services ────────────────────────────
+volumes:
+  loki_data:
+  grafana_data:
+
 services:
+
+  # ── Data layer ──────────────────────────────────────────────────────────────
 
   postgres:
     image: "postgres:16"
@@ -12,6 +31,7 @@ services:
     volumes:
       - "./postgres_data:/var/lib/postgresql/data"
     ports:
+      # Port exposed for local development only — not reachable on the 'api' network
       - "${POSTGRES_PORT}:5432"
     restart: unless-stopped
     healthcheck:
@@ -19,6 +39,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
 
   minio:
     image: "minio/minio:latest"
@@ -32,6 +54,7 @@ services:
     volumes:
       - "./minio_data:/data"
     ports:
+      # Ports exposed for local development only — not reachable on the 'api' network
       - "9000:9000"
       - "9001:9001"
     restart: unless-stopped
@@ -40,6 +63,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
+
+  # ── MLOps layer ─────────────────────────────────────────────────────────────
 
   mlflow:
     build:
@@ -74,6 +101,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - backend  # reaches postgres and minio
+      - api      # reachable by ui for experiment/model queries
 
   trainer:
     build:
@@ -97,6 +127,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - backend
 
   inference:
     build:
@@ -114,6 +146,13 @@ services:
       AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER}"
       AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD}"
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      # Optional Claude VLM backend — set BACKEND=claude to activate
+      BACKEND: "${BACKEND:-mlflow}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_MODEL: "${CLAUDE_MODEL:-claude-sonnet-4-6}"
+      # API key auth (L1/L2) — leave empty to disable auth in dev
+      INFERENCE_ADMIN_KEY: "${INFERENCE_ADMIN_KEY:-}"
+      INFERENCE_VIEWER_KEY: "${INFERENCE_VIEWER_KEY:-}"
     volumes:
       - "./inference_service:/app"
     depends_on:
@@ -130,6 +169,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    networks:
+      - backend  # reaches mlflow and minio
+      - api      # reachable by ui
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
 
   ui:
     image: "node:18"
@@ -139,7 +183,62 @@ services:
       bash -c "cd /app && npm install && npm run dev"
     environment:
       NODE_ENV: "development"
+      # Next.js API routes use these to reach backend services on the Docker network
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      INFERENCE_URL: "http://inference:8000"
     volumes:
       - "./ui:/app"
     ports:
       - "${UI_PORT}:3000"
+    networks:
+      - api  # reaches mlflow and inference only — no direct access to postgres/minio
+
+  # ── Monitoring (M9) ─────────────────────────────────────────────────────────
+
+  loki:
+    image: "grafana/loki:2.9.0"
+    container_name: "loki"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - "./monitoring/loki-config.yaml:/etc/loki/local-config.yaml:ro"
+      - "loki_data:/loki"
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - backend  # promtail and grafana reach loki internally
+
+  promtail:
+    image: "grafana/promtail:2.9.0"
+    container_name: "promtail"
+    command: -config.file=/etc/promtail/config.yaml
+    volumes:
+      # Read Docker container logs from the host
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
+      - "./monitoring/promtail-config.yaml:/etc/promtail/config.yaml:ro"
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - backend
+
+  grafana:
+    image: "grafana/grafana:10.2.0"
+    container_name: "grafana"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Disable telemetry in local dev
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - "./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "grafana_data:/var/lib/grafana"
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - backend  # reaches loki
+      - api      # exposed to users via port mapping

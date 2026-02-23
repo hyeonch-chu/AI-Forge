@@ -218,6 +218,135 @@ class TestTrainArtifacts:
 
 
 # ---------------------------------------------------------------------------
+# train() — ONNX / TensorRT export (M7)
+# ---------------------------------------------------------------------------
+class TestTrainExport:
+    def test_calls_model_export_when_format_set(
+        self, mock_mlflow: MagicMock, mock_yolo_results: MagicMock
+    ) -> None:
+        """model.export() must be called with the requested format."""
+        with patch("ultralytics.YOLO") as MockYOLO:
+            mock_model = MockYOLO.return_value
+            mock_model.train.return_value = mock_yolo_results
+            mock_model.export.return_value = "/tmp/best.onnx"
+            from train import train
+
+            train(
+                model_weights="yolov8n.pt",
+                data_yaml="/data/coco.yaml",
+                epochs=1,
+                imgsz=320,
+                batch=2,
+                experiment="exp",
+                run_name=None,
+                device="cpu",
+                register_name=None,
+                export_format="onnx",
+            )
+        mock_model.export.assert_called_once_with(format="onnx")
+
+    def test_logs_exported_artifact_to_mlflow(
+        self, mock_mlflow: MagicMock, mock_yolo_results: MagicMock
+    ) -> None:
+        """Exported file must be logged as an MLflow artifact under 'exports/'."""
+        with patch("ultralytics.YOLO") as MockYOLO:
+            mock_model = MockYOLO.return_value
+            mock_model.train.return_value = mock_yolo_results
+            mock_model.export.return_value = "/tmp/best.onnx"
+            from train import train
+
+            train(
+                model_weights="yolov8n.pt",
+                data_yaml="/data/coco.yaml",
+                epochs=1,
+                imgsz=320,
+                batch=2,
+                experiment="exp",
+                run_name=None,
+                device="cpu",
+                register_name=None,
+                export_format="onnx",
+            )
+        # First call: best.pt under 'weights'; second call: exported file under 'exports'
+        assert mock_mlflow.log_artifact.call_count == 2
+        export_call_kwargs = mock_mlflow.log_artifact.call_args_list[1][1]
+        assert export_call_kwargs["artifact_path"] == "exports"
+
+    def test_logs_export_format_as_param(
+        self, mock_mlflow: MagicMock, mock_yolo_results: MagicMock
+    ) -> None:
+        """export_format must appear in the logged MLflow parameters."""
+        with patch("ultralytics.YOLO") as MockYOLO:
+            MockYOLO.return_value.train.return_value = mock_yolo_results
+            MockYOLO.return_value.export.return_value = "/tmp/best.onnx"
+            from train import train
+
+            train(
+                model_weights="yolov8n.pt",
+                data_yaml="/data/coco.yaml",
+                epochs=1,
+                imgsz=320,
+                batch=2,
+                experiment="exp",
+                run_name=None,
+                device="cpu",
+                register_name=None,
+                export_format="torchscript",
+            )
+        logged_params = mock_mlflow.log_params.call_args[0][0]
+        assert logged_params.get("export_format") == "torchscript"
+
+    def test_skips_export_when_format_is_none(
+        self, mock_mlflow: MagicMock, mock_yolo_results: MagicMock
+    ) -> None:
+        """model.export() must NOT be called when export_format is None."""
+        with patch("ultralytics.YOLO") as MockYOLO:
+            mock_model = MockYOLO.return_value
+            mock_model.train.return_value = mock_yolo_results
+            from train import train
+
+            train(
+                model_weights="yolov8n.pt",
+                data_yaml="/data/coco.yaml",
+                epochs=1,
+                imgsz=320,
+                batch=2,
+                experiment="exp",
+                run_name=None,
+                device="cpu",
+                register_name=None,
+                export_format=None,
+            )
+        mock_model.export.assert_not_called()
+
+    def test_export_failure_is_non_fatal(
+        self, mock_mlflow: MagicMock, mock_yolo_results: MagicMock
+    ) -> None:
+        """A failing export must not raise — training results are already saved."""
+        with patch("ultralytics.YOLO") as MockYOLO:
+            mock_model = MockYOLO.return_value
+            mock_model.train.return_value = mock_yolo_results
+            mock_model.export.side_effect = RuntimeError("TensorRT not installed")
+            from train import train
+
+            # Must not raise even though export() throws
+            train(
+                model_weights="yolov8n.pt",
+                data_yaml="/data/coco.yaml",
+                epochs=1,
+                imgsz=320,
+                batch=2,
+                experiment="exp",
+                run_name=None,
+                device="cpu",
+                register_name=None,
+                export_format="engine",
+            )
+        # Only best.pt artifact logged — the failed export produces no artifact
+        mock_mlflow.log_artifact.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # parse_args()
 # ---------------------------------------------------------------------------
 class TestParseArgs:
@@ -242,6 +371,8 @@ class TestParseArgs:
         assert args.experiment == "yolo_training"
         assert args.device == "cpu"
         assert args.register_name is None
+        # Export should default to None (no export)
+        assert args.export_format is None
 
     def test_custom_values(self) -> None:
         from train import parse_args
@@ -265,3 +396,53 @@ class TestParseArgs:
         assert args.model == "yolov8s.pt"
         assert args.epochs == 100
         assert args.register_name == "prod_model"
+
+    def test_export_flag_accepted(self) -> None:
+        """--export flag should set export_format to the given value."""
+        from train import parse_args
+
+        with patch(
+            "sys.argv",
+            ["train.py", "--data", "/d/coco.yaml", "--export", "onnx"],
+        ):
+            args = parse_args()
+        assert args.export_format == "onnx"
+
+    def test_invalid_export_format_rejected(self) -> None:
+        """An unrecognised export format should cause argparse to exit."""
+        from train import parse_args
+
+        with pytest.raises(SystemExit):
+            with patch(
+                "sys.argv",
+                ["train.py", "--data", "/d/coco.yaml", "--export", "webassembly"],
+            ):
+                parse_args()
+
+
+# ---------------------------------------------------------------------------
+# YOLO preset list (M6)
+# ---------------------------------------------------------------------------
+class TestSupportedModels:
+    def test_preset_list_is_non_empty(self) -> None:
+        from train import SUPPORTED_YOLO_PRESETS
+
+        assert len(SUPPORTED_YOLO_PRESETS) > 0
+
+    def test_default_model_is_in_presets(self) -> None:
+        """The default --model value must be a recognised preset."""
+        from train import SUPPORTED_YOLO_PRESETS
+
+        assert "yolov8n.pt" in SUPPORTED_YOLO_PRESETS
+
+    def test_yolov10_variants_present(self) -> None:
+        from train import SUPPORTED_YOLO_PRESETS
+
+        for variant in ["yolov10n.pt", "yolov10m.pt", "yolov10x.pt"]:
+            assert variant in SUPPORTED_YOLO_PRESETS
+
+    def test_yolo11_variants_present(self) -> None:
+        from train import SUPPORTED_YOLO_PRESETS
+
+        for variant in ["yolo11n.pt", "yolo11m.pt", "yolo11x.pt"]:
+            assert variant in SUPPORTED_YOLO_PRESETS
